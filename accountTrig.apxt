@@ -1,0 +1,8 @@
+trigger accountTrig on Account (after insert) {
+	
+	if (trigger.isAfter && trigger.isInsert) {
+		insertCepAccount.onAfterInsert( trigger.new );
+        
+    } 
+	
+}
