@@ -1,0 +1,77 @@
+public with sharing class insertCepAccount {
+    
+    	private static boolean isTrigger = false;
+    
+    public class accountException extends Exception {}
+    
+    public class viaCepReturn{
+        String cep;
+        String logradouro;
+        String uf;
+        
+    }
+    
+    public static void onAfterInsert(List <Account> triggerNew){
+		if (isTrigger == true) {
+			return;				
+		} else
+		   isTrigger = true;	
+		
+		List<Id> accountsId = new List<Id>();
+		for (Account a : triggerNew) {
+			accountsId.add(a.Id);
+            
+		}	
+        
+		viaCepCallout(accountsId);
+        
+    }
+       
+    @future (callout = true)
+    private static void viaCepCallout(List<Id> acct){
+        string resposta;
+        
+        List<Account> accountInfo = [SELECT Id, BillingPostalCode, BillingStreet, BillingState 
+                                    FROM account WHERE Id = :acct];
+        
+        for(Account a : accountInfo){
+            string endpoint = 'https://viacep.com.br/ws/'+a.BillingPostalCode+'/json/';
+            
+            HttpRequest req = new HttpRequest();
+            HttpResponse res = new HttpResponse();
+            Http http = new Http();
+            req.setMethod('GET');
+            req.setEndpoint(endpoint);
+            
+
+            try{
+                res = http.send(req);
+                if(res.getStatusCode() != 200){
+                    throw new accountException(res.getStatus());
+                    
+                }
+            } catch(accountException e){
+                system.debug('Error Http response');
+                return;
+                
+            }
+            
+            resposta = res.getBody();
+            JSONParser parser = JSON.createParser(resposta);
+            parser.nextToken();
+        
+        	viaCepReturn viaCep = new viaCepReturn();
+		    	viaCep = (viaCepReturn)parser.readValueAs(viaCepReturn.class);
+		    	a.BillingPostalCode = viaCep.cep;
+		    	a.BillingStreet = viaCep.logradouro;
+		    	a.BillingState = viaCep.uf; 
+                
+        }
+        
+        update accountInfo;
+		isTrigger = false;
+        
+    }
+    
+
+}
